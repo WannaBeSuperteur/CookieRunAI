@@ -21,13 +21,13 @@ import deepLearning_GPU_helper as DLH
 # width      : width of each element in the array
 # height     : height of each element in the array
 def loadImgs(location, width, height):
-    file_list = os.listdir(testImgLoc)
+    file_list = os.listdir(location)
 
     imgArray = [] # array to return
     labels = [] # labels to return
 
     for file in range(len(file_list)):
-        im = Image.open(testImgLoc + file_list[file])
+        im = Image.open(location + file_list[file])
         im = im.resize((width, height))
         
         imArray = np.array(im) # [height][width][3] numpy array of this image
