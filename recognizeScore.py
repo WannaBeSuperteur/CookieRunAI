@@ -105,7 +105,7 @@ def test(imgArray, answerArray, testFileList, modelName):
 
         # compare maxIndex with correct answer
         for j in range(10): outputLayer[j] = round(max(0.000499, outputLayer[j]-0.0005), 3) # to print
-        print(testFileList[i] + ' / out: ' + str(outputLayer) + ' / ans: ' + str(answerArray[i]))
+        print(testFileList[i] + ' '*(16-len(testFileList[i])) + ' / out: ' + str(outputLayer) + ' / ans: ' + str(answerArray[i]))
         if answerArray[i][maxIndex] == 1: correct += 1
 
     print('correct rate: ' + str(correct) + ' / ' + str(count) + ', ' + str(round(100*correct/count, 2)) + '%')
