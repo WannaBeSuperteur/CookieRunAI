@@ -51,11 +51,12 @@ def loadImgs(location, width, height):
 # labels     : array that contains all the labels for images FOR TRAIN: in the form of [imgs]
 # drop       : dropout
 # lr         : learning rate
+# epoch      : epoch
 # height     : height of image
 # width      : width of image
 # modelName  : name of deep learning model
 # deviceName : name of device
-def train(imgArray, labels, modelName, drop, lr, height, width, deviceName):
+def train(imgArray, labels, modelName, drop, lr, epoch, height, width, deviceName):
 
     # Neural Network
     NN = [tf.keras.layers.Reshape((height, width, 1), input_shape=(height, width,)),
@@ -75,7 +76,7 @@ def train(imgArray, labels, modelName, drop, lr, height, width, deviceName):
     op = tf.keras.optimizers.Adam(lr)
 
     # learning
-    DL.deepLearning(NN, op, 'mean_squared_error', imgArray, labels, modelName, 1500, False, True, deviceName)
+    DL.deepLearning(NN, op, 'mean_squared_error', imgArray, labels, modelName, epoch, False, True, deviceName)
     
 ## test
 # imgArray    : array that contains all the images FOR TEST: in the form of [imgs][height][width]
@@ -108,11 +109,18 @@ def test(imgArray, answerArray, testFileList, modelName):
         if answerArray[i][maxIndex] == 1: correct += 1
 
     print('correct rate: ' + str(correct) + ' / ' + str(count) + ', ' + str(round(100*correct/count, 2)) + '%')
-        
-if __name__ == '__main__':
-    deviceName = input('device name (for example, cpu:0 or gpu:0)')
-    testImgLoc = 'images/test/' # location where test images exist
 
+## default training and test function
+# drop       : dropout
+# lr         : learning rate
+# height     : height of image
+# width      : width of image
+# modelName  : name of deep learning model
+# deviceName : name of device
+# testImgLoc : location where test images exist
+# trainProb  : probability that each data is designated as data for training
+# testing    : do test?
+def defaultTrainAndTest(drop, lr, epoch, height, width, modelName, deviceName, testImgLoc, trainProb, testing):
     a = loadImgs(testImgLoc, 16, 24)
     imgArray = a[0] # in the form of [height][width]
     labels = a[1] # in the form of [0, 0, ..., 0] (10 elements), only (label)-th element is 1
@@ -126,16 +134,26 @@ if __name__ == '__main__':
     testLabels = [] # label for test
 
     for i in range(len(imgArray)):
-        if random.random() < 0.75: # each image is for train with 75% probability
+        if random.random() < trainProb: # each image is for train with probability (trainProb)
             trainImgArray.append(imgArray[i])
             trainLabels.append(labels[i])
-        else: # each image is for test with 25% probability
+        else: # each image is for test with probability (1-trainProb)
             testFileList.append(file_list[i])
             testImgArray.append(imgArray[i])
             testLabels.append(labels[i])
 
     # train and test
-    train(trainImgArray, trainLabels, 'scoreRecognize', 0, 0.0001, 24, 16, deviceName)
-    test(testImgArray, testLabels, testFileList, 'scoreRecognize')
+    train(trainImgArray, trainLabels, modelName, drop, lr, epoch, height, width, deviceName)
 
-    print('\ntrained using ' + str(len(trainLabels)) + ' images:\n' + str(list(set(file_list) - set(testFileList))) + '\n')
+    if testing == True:
+        test(testImgArray, testLabels, testFileList, modelName)
+        print('\ntrained using ' + str(len(trainLabels)) + ' images:\n' + str(list(set(file_list) - set(testFileList))) + '\n')
+
+# MAIN FUNCTION
+if __name__ == '__main__':
+    deviceName = input('device name (for example, cpu:0 or gpu:0)')
+    testImgLoc = 'images/test/' # location where test images exist
+
+    # train and test
+    defaultTrainAndTest(drop=0, lr=0.0001, epoch=1500, height=24, width=16, modelName='scoreRecognize',
+                        deviceName=deviceName, testImgLoc=testImgLoc, trainProb=0.75, testing=True)
