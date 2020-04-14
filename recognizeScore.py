@@ -27,10 +27,12 @@ def imArrayToArray(imArray):
     array = [[0]*width for _ in range(height)]
 
     # shape change: [height][width][3] -> [height][width]
-    # int range -4 ~ 5 (based on brightness : sum of R, G and B values)
+    # value (-1.0 ~ +1.0) based on brightness : sum of R, G and B values
+    # (-1.0 : BLACK, 0.0 : GRAY, +1.0 : WHITE)
+    # [Note: discrete input value is better for training than continuous input value]
     for i in range(len(array[0])):
         for j in range(len(array)):
-            array[j][i] = int(sum(imArray[j][i])/77)-4
+            array[j][i] = int(sum(imArray[j][i]) / 77) - 4
 
     return array
 
@@ -203,12 +205,13 @@ def testNumeric(img, modelName, w, h):
 
         # deep learning output for test data (imgArray)
         croppedImage = img.crop((left, top, right, bottom)) # crop
-        tempFileName = str(int(random.random()*pow(10.0, 15.0))) + str(int(random.random()*pow(10.0, 15.0))) + '.png'
+        tempFileName = 'temp.png'
         croppedImage.save(tempFileName) # temporarily save resized image file
         croppedImage = Image.open(tempFileName) # open the temporarily saved file
         resizedImage = croppedImage.resize((w, h)) # resize
         imArray = np.array(resizedImage) # [height][width][3] numpy array of resized image
         imArray_ = imArrayToArray(imArray) # change the shape([height][width][3]) into [height][width]
+        os.remove(tempFileName) # delete the file
         
         testOutput = DL.modelOutput(model, [imArray_])
 
