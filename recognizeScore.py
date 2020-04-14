@@ -27,8 +27,8 @@ def imArrayToArray(imArray):
     array = [[0]*width for _ in range(height)]
 
     # shape change: [height][width][3] -> [height][width]
-    # value (-1.0 ~ +1.0) based on brightness : sum of R, G and B values
-    # (-1.0 : BLACK, 0.0 : GRAY, +1.0 : WHITE)
+    # value (-4.0 ~ +5.0) based on brightness : sum of R, G and B values
+    # (-4.0 : BLACK, 0.0 : GRAY, +5.0 : WHITE)
     # [Note: discrete input value is better for training than continuous input value]
     for i in range(len(array[0])):
         for j in range(len(array)):
