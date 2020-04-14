@@ -15,6 +15,25 @@ from PIL import Image
 import deepLearning_GPU as DL
 import deepLearning_GPU_helper as DLH
 
+## return shape-changed image array([height][width]) of original iamge array([height][width][3])
+# imArray    : original image array
+def imArrayToArray(imArray):
+
+    # height and width
+    height = len(imArray)
+    width = len(imArray[0])
+
+    # [height][width] array of this image
+    array = [[0]*width for _ in range(height)]
+
+    # shape change: [height][width][3] -> [height][width]
+    # int range -4 ~ 5 (based on brightness : sum of R, G and B values)
+    for i in range(len(array[0])):
+        for j in range(len(array)):
+            array[j][i] = int(sum(imArray[j][i])/77)-4
+
+    return array
+
 ## return array that represents each image in location
 ## each element of array represent each image with width 'width' and height 'height'
 # location   : location where train and test images exist
@@ -31,12 +50,7 @@ def loadImgs(location, width, height):
         im = im.resize((width, height))
         
         imArray = np.array(im) # [height][width][3] numpy array of this image
-
-        array = [[0]*width for _ in range(height)] # [height][width] array of this image
-
-        for i in range(len(array[0])):
-            for j in range(len(array)):
-                array[j][i] = int(sum(imArray[j][i])/77)-4 # int range -4 ~ 5 (based on brightness : sum of R, G and B values)
+        array = imArrayToArray(imArray)
 
         # append this array to imgArray
         imgArray.append(array)
@@ -149,11 +163,115 @@ def defaultTrainAndTest(drop, lr, epoch, height, width, modelName, deviceName, t
         test(testImgArray, testLabels, testFileList, modelName)
         print('\ntrained using ' + str(len(trainLabels)) + ' images:\n' + str(list(set(file_list) - set(testFileList))) + '\n')
 
+## test function for image of numeric value (ex: 1,312,500)
+# img        : image of numeric value
+# modelName  : name of deep learning model
+# w          : width of resized image to input to the model
+# h          : height of resized image to input to the model
+def testNumeric(img, modelName, w, h):
+
+    # find height and width of image
+    width = img.size[0] # width of image
+    height = img.size[1] # height of image
+    
+    print('height=' + str(height) + ', width=' + str(width))
+
+    # initialize top, bottom, left and right
+    top = 0
+    bottom = height
+    left = width
+    right = width
+
+    recognized = ''
+    model = DL.deepLearningModel(modelName, True)
+
+    # crop and recognize number
+    while left >= 0:
+
+        # resize cropped area of image
+        # width of cropped image >= 0.45*(bottom-top)
+        # -> resize vertically (remove top 2px and bottom 2px rows)
+        if right-left >= 0.45*(bottom-top) and bottom-top >= h:
+            top += 2
+            bottom -= 2
+        # otherwise -> resize horizontally
+        # -> expand cropped image area to 2 pixels(columns) left 
+        else: left -= 2
+
+        # width of cropped image must be at least the value of w
+        if right-left < w: continue
+
+        # deep learning output for test data (imgArray)
+        croppedImage = img.crop((left, top, right, bottom)) # crop
+        tempFileName = str(int(random.random()*pow(10.0, 15.0))) + str(int(random.random()*pow(10.0, 15.0))) + '.png'
+        croppedImage.save(tempFileName) # temporarily save resized image file
+        croppedImage = Image.open(tempFileName) # open the temporarily saved file
+        resizedImage = croppedImage.resize((w, h)) # resize
+        imArray = np.array(resizedImage) # [height][width][3] numpy array of resized image
+        imArray_ = imArrayToArray(imArray) # change the shape([height][width][3]) into [height][width]
+        
+        testOutput = DL.modelOutput(model, [imArray_])
+
+        # output layer array of test result
+        outputLayer = testOutput[len(testOutput)-1][0]
+
+        # find index of maximum value in outputLayer
+        maxIndex = 0 # index of maximum value
+        maxVal = max(outputLayer)
+        for i in range(10):
+            if outputLayer[i] == maxVal: maxIndex = i
+
+        # print test result
+        print('top,bottom,left,right = ' + str(top) + ' ' + str(bottom) + ' ' + str(left) + ' ' + str(right) +
+              ' / maxIndex,maxVal = ' + str(maxIndex) + ' ' + str(round(maxVal, 6)))
+
+        # recognize as number if max(one-hot output) > 0.75 and > 0.75 * sum(one-hot output)
+        if maxVal > 0.75 and maxVal > 0.75 * sum(outputLayer):
+            print('recognized as ' + str(maxIndex))
+            recognized = str(maxIndex) + recognized
+            right = left # move right boundary of cropped area to left boundary (so that cropped area is 0px horizontally)
+
+            # 'jump' for the ',' token (move 10 pixels left)
+            if len(recognized) % 3 == 0:
+                left -= 10
+                right -= 10
+
+    # return result
+    return recognized
+
+## test function for image of numeric value in a specific location
+## suppose: file name indicate the numeric value (ex: 1312500.png -> 1,312,500)
+# location   : location where numeric value images exist
+# modelName  : name of deep learning model
+# w          : width of resized image to input to the model
+# h          : height of resized image to input to the model
+def testNumericInLocation(location, modelName, w, h):
+    file_list = os.listdir(location)
+
+    testAnswer = [] # answer for test
+
+    for file in range(len(file_list)): # for each image file
+        im = Image.open(location + file_list[file])
+
+        # answer for the image (compare it with correct answer)
+        testAnswer.append(testNumeric(im, modelName, w, h))
+
+    # print result
+    for i in range(len(testAnswer)):
+        print('answer of model:' + testAnswer[i] + ', right answer:' + str(file_list[i].split('.')[0]))
+
 # MAIN FUNCTION
 if __name__ == '__main__':
     deviceName = input('device name (for example, cpu:0 or gpu:0)')
     testImgLoc = 'images/test/' # location where test images exist
+    testNumericLoc = 'images/result/' # location where numeric value images exist
 
     # train and test
-    defaultTrainAndTest(drop=0, lr=0.0001, epoch=1500, height=24, width=16, modelName='scoreRecognize',
-                        deviceName=deviceName, testImgLoc=testImgLoc, trainProb=0.75, testing=True)
+    try: # check if scoreRecognize.h5 file exists
+        open('scoreRecognize.h5')
+    except: # do train and test if the file does not exist
+        defaultTrainAndTest(drop=0, lr=0.0001, epoch=200, height=24, width=16, modelName='scoreRecognize',
+                            deviceName=deviceName, testImgLoc=testImgLoc, trainProb=0.75, testing=True)
+
+    # test for numeric value
+    testNumericInLocation(testNumericLoc, 'scoreRecognize', 16, 24)
