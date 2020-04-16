@@ -17,7 +17,8 @@ import deepLearning_GPU_helper as DLH
 
 ## return shape-changed image array([height][width]) of original iamge array([height][width][3])
 # imArray    : original image array
-def imArrayToArray(imArray):
+# discrete   : element of returning array contains integer between -4.0 ~ +5.0, otherwise sum of R, G and B
+def imArrayToArray(imArray, discrete):
 
     # height and width
     height = len(imArray)
@@ -32,7 +33,8 @@ def imArrayToArray(imArray):
     # [Note: discrete input value is better for training than continuous input value]
     for i in range(len(array[0])):
         for j in range(len(array)):
-            array[j][i] = int(sum(imArray[j][i]) / 77) - 4
+            if discrete: array[j][i] = int(sum(imArray[j][i]) / 77) - 4
+            else: array[j][i] = sum(imArray[j][i])
 
     return array
 
@@ -52,7 +54,7 @@ def loadImgs(location, width, height):
         im = im.resize((width, height))
         
         imArray = np.array(im) # [height][width][3] numpy array of this image
-        array = imArrayToArray(imArray)
+        array = imArrayToArray(imArray, True)
 
         # append this array to imgArray
         imgArray.append(array)
@@ -165,6 +167,30 @@ def defaultTrainAndTest(drop, lr, epoch, height, width, modelName, deviceName, t
         test(testImgArray, testLabels, testFileList, modelName)
         print('\ntrained using ' + str(len(trainLabels)) + ' images:\n' + str(list(set(file_list) - set(testFileList))) + '\n')
 
+## check if the 'column of pixel' is B-W-B
+## that is, there is white(sum of R, G and B >= 704) pixel between two black(sum of R, G and B < 64) pixels
+# img        : image of numeric value
+# colNo      : column index to check if it is B-W-B
+def checkForCOP(img, colNo):
+    imArray = np.array(img) # [height][width][3] numpy array of img
+    imArray_ = imArrayToArray(imArray, False) # change the shape([height][width][3]) into [height][width]
+
+    thisCol = [] # colNo-th column of image
+    for i in range(len(imArray_)): thisCol.append(imArray_[i][colNo])
+
+    firstB = False # find first black pixel (must be in the upper half of the column)
+    firstW = False # find first white pixel
+    secondB = False # find second black pixel
+
+    for i in range(len(thisCol)):
+        if firstB == False and thisCol[i] < 64 and i < len(thisCol)/2: firstB = True
+        elif firstB == True and thisCol[i] >= 704: firstW = True
+        elif firstW == True and thisCol[i] < 64: secondB = True
+
+    # return True only when all 3 conditions are True
+    if firstB == True and firstW == True and secondB == True: return True
+    else: return False
+
 ## test function for image of numeric value (ex: 1,312,500)
 # img        : image of numeric value
 # modelName  : name of deep learning model
@@ -186,58 +212,61 @@ def testNumeric(img, modelName, w, h):
 
     recognized = ''
     model = DL.deepLearningModel(modelName, True)
+    lastCheckForCOP = False # latest value of checkForCOP function (init as False)
 
     # crop and recognize number
     while left >= 0:
 
         # resize cropped area of image
-        # width of cropped image >= 0.45*(bottom-top)
-        # -> resize vertically (remove top 2px and bottom 2px rows)
-        if right-left >= 0.45*(bottom-top) and bottom-top >= h:
-            top += 2
-            bottom -= 2
-        # otherwise -> resize horizontally
-        # -> expand cropped image area to 2 pixels(columns) left 
-        else: left -= 2
+        # resize horizontally -> expand cropped image area to 1 pixels(columns) left 
+        left -= 1
 
-        # width of cropped image must be at least the value of w
-        if right-left < w: continue
+        # check if the 'column of pixel' is B-W-B
+        # not COP, then meet boundary of 'number'
+        cFCOP = checkForCOP(img, left)
 
-        # deep learning output for test data (imgArray)
-        croppedImage = img.crop((left, top, right, bottom)) # crop
-        tempFileName = 'temp.png'
-        croppedImage.save(tempFileName) # temporarily save resized image file
-        croppedImage = Image.open(tempFileName) # open the temporarily saved file
-        resizedImage = croppedImage.resize((w, h)) # resize
-        imArray = np.array(resizedImage) # [height][width][3] numpy array of resized image
-        imArray_ = imArrayToArray(imArray) # change the shape([height][width][3]) into [height][width]
-        os.remove(tempFileName) # delete the file
-        
-        testOutput = DL.modelOutput(model, [imArray_])
+        # start of 'number'
+        if cFCOP == True and lastCheckForCOP == False:
 
-        # output layer array of test result
-        outputLayer = testOutput[len(testOutput)-1][0]
+            # move right boundary of cropped area to left boundary, and move left boundary 15 pixels left,
+            # so that cropped area is 15px horizontally
+            right = left
+            left = max(left-15, 1)
 
-        # find index of maximum value in outputLayer
-        maxIndex = 0 # index of maximum value
-        maxVal = max(outputLayer)
-        for i in range(10):
-            if outputLayer[i] == maxVal: maxIndex = i
+        # start of boundary of 'number' = end of 'number'
+        elif cFCOP == False and lastCheckForCOP == True:
 
-        # print test result
-        print('top,bottom,left,right = ' + str(top) + ' ' + str(bottom) + ' ' + str(left) + ' ' + str(right) +
-              ' / maxIndex,maxVal = ' + str(maxIndex) + ' ' + str(round(maxVal, 6)))
+            # deep learning output for test data (imgArray)
+            croppedImage = img.crop((max(left-2, 0), top, min(right+2, width), bottom)) # crop
+            tempFileName = 'temp.png'
+            croppedImage.save(tempFileName) # temporarily save resized image file
+            croppedImage = Image.open(tempFileName) # open the temporarily saved file
+            resizedImage = croppedImage.resize((w, h)) # resize
+            imArray = np.array(resizedImage) # [height][width][3] numpy array of resized image
+            imArray_ = imArrayToArray(imArray, True) # change the shape([height][width][3]) into [height][width]
+            os.remove(tempFileName) # delete the file
+            
+            testOutput = DL.modelOutput(model, [imArray_])
 
-        # recognize as number if max(one-hot output) > 0.75 and > 0.75 * sum(one-hot output)
-        if maxVal > 0.75 and maxVal > 0.75 * sum(outputLayer):
+            # output layer array of test result
+            outputLayer = testOutput[len(testOutput)-1][0]
+
+            # find index of maximum value in outputLayer
+            maxIndex = 0 # index of maximum value
+            maxVal = max(outputLayer)
+            for i in range(10):
+                if outputLayer[i] == maxVal: maxIndex = i
+
+            # print test result
+            print('top,bottom,left,right = ' + str(top) + ' ' + str(bottom) + ' ' + str(left) + ' ' + str(right) +
+                  ' / maxIndex,maxVal = ' + str(maxIndex) + ' ' + str(round(maxVal, 6)))
+
+            # recognize as number whose match probability is highest
             print('recognized as ' + str(maxIndex))
             recognized = str(maxIndex) + recognized
-            right = left # move right boundary of cropped area to left boundary (so that cropped area is 0px horizontally)
 
-            # 'jump' for the ',' token (move 10 pixels left)
-            if len(recognized) % 3 == 0:
-                left -= 10
-                right -= 10
+        # update lastCheckForCOP as current value
+        lastCheckForCOP = cFCOP
 
     # return result
     return recognized
