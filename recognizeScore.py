@@ -168,7 +168,7 @@ def defaultTrainAndTest(drop, lr, epoch, height, width, modelName, deviceName, t
         print('\ntrained using ' + str(len(trainLabels)) + ' images:\n' + str(list(set(file_list) - set(testFileList))) + '\n')
 
 ## check if the 'column of pixel' is B-W-B
-## that is, there is white(sum of R, G and B >= 704) pixel between two black(sum of R, G and B < 64) pixels
+## that is, there is white(sum of R, G and B >= 760) pixel between two black(sum of R, G and B < 64) pixels
 # img        : image of numeric value
 # colNo      : column index to check if it is B-W-B
 def checkForCOP(img, colNo):
@@ -179,12 +179,12 @@ def checkForCOP(img, colNo):
     for i in range(len(imArray_)): thisCol.append(imArray_[i][colNo])
 
     firstB = False # find first black pixel (must be in the upper half of the column)
-    firstW = False # find first white pixel
+    firstW = False # find first white pixel (must be in the upper half of the column)
     secondB = False # find second black pixel
 
     for i in range(len(thisCol)):
         if firstB == False and thisCol[i] < 64 and i < len(thisCol)/2: firstB = True
-        elif firstB == True and thisCol[i] >= 704: firstW = True
+        elif firstB == True and thisCol[i] >= 760 and i < len(thisCol)/2: firstW = True
         elif firstW == True and thisCol[i] < 64: secondB = True
 
     # return True only when all 3 conditions are True
@@ -237,7 +237,7 @@ def testNumeric(img, modelName, w, h):
         elif cFCOP == False and lastCheckForCOP == True:
 
             # deep learning output for test data (imgArray)
-            croppedImage = img.crop((max(left-2, 0), top, min(right+2, width), bottom)) # crop
+            croppedImage = img.crop((max(left-2, 0), top, min(right+6, width), bottom)) # crop
             tempFileName = 'temp.png'
             croppedImage.save(tempFileName) # temporarily save resized image file
             croppedImage = Image.open(tempFileName) # open the temporarily saved file
@@ -258,7 +258,7 @@ def testNumeric(img, modelName, w, h):
                 if outputLayer[i] == maxVal: maxIndex = i
 
             # print test result
-            print('top,bottom,left,right = ' + str(top) + ' ' + str(bottom) + ' ' + str(left) + ' ' + str(right) +
+            print('top,bottom,left,right = ' + str(top) + ' ' + str(bottom) + ' ' + str(max(left-2, 0)) + ' ' + str(min(right+6, width)) +
                   ' / maxIndex,maxVal = ' + str(maxIndex) + ' ' + str(round(maxVal, 6)))
 
             # recognize as number whose match probability is highest
