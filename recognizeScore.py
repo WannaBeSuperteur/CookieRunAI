@@ -12,6 +12,8 @@ from tensorflow.keras.models import Model, model_from_json
 from keras import backend as K
 from PIL import Image
 
+import matplotlib.pyplot as plt
+
 import deepLearning_GPU as DL
 import deepLearning_GPU_helper as DLH
 
@@ -99,9 +101,10 @@ def train(imgArray, labels, modelName, drop, lr, epoch, height, width, deviceNam
 ## test
 # imgArray    : array that contains all the images FOR TEST: in the form of [imgs][height][width]
 # answerArray : array of correct answer: in the form of [answer0, answer1, ...]
-# testFileList: list of test files
+# testFileList: list of test files (name without path)
 # modelName   : name of deep learning model
-def test(imgArray, answerArray, testFileList, modelName):
+# XAI         : use XAI?
+def test(imgArray, answerArray, testFileList, modelName, XAI):
 
     count = len(imgArray) # number of images
     correct = 0 # number of correctly classified images
@@ -126,6 +129,38 @@ def test(imgArray, answerArray, testFileList, modelName):
         print(testFileList[i] + ' '*(16-len(testFileList[i])) + ' / out: ' + str(outputLayer) + ' / ans: ' + str(answerArray[i]))
         if answerArray[i][maxIndex] == 1: correct += 1
 
+        # using explainable XAI
+        if XAI == True and random.random() < 0.2: # (20% probability for each test image)
+            thisImg = imgArray[i]
+            height = len(imgArray[i])
+            width = len(imgArray[i][0])
+
+            # square dif of output layer when changing each pixel by 1 (interval: 2 pixels for both horizontal and vertical)
+            result = [[0] * int(width) for _ in range(int(height))]
+            maxSquareDif = 0.0 # max value of square dif (potential)
+
+            # modify each pixel by 1 and see the result
+            for j in range(int(height)):
+                for k in range(int(width)):
+                    
+                    newImg = DLH.arrayCopy(thisImg)
+                    newImg[j][k] += 1
+                    newImgOutput = DL.modelOutput(newModel, [newImg])
+
+                    # compare output layer
+                    newImgOutputLayer = newImgOutput[len(newImgOutput)-1][0] # output layer array of modified image
+
+                    squareDif = 0
+                    for l in range(10): squareDif += pow(outputLayer[l] - newImgOutputLayer[l], 2)
+                    # print('modify ' + str(j) + ',' + str(k) + ' by 1 -> square of dif = ' + str(round(squareDif, 8)))
+
+                    # save into array
+                    result[j][k] = squareDif
+                    if squareDif > maxSquareDif: maxSquareDif = squareDif
+
+            # save the square dif array to image
+            plt.imsave(testFileList[i].split('.')[0] + '_why.png', np.array(result), cmap='Greys')
+
     print('correct rate: ' + str(correct) + ' / ' + str(count) + ', ' + str(round(100*correct/count, 2)) + '%')
 
 ## default training and test function
@@ -138,7 +173,8 @@ def test(imgArray, answerArray, testFileList, modelName):
 # testImgLoc : location where test images exist
 # trainProb  : probability that each data is designated as data for training
 # testing    : do test?
-def defaultTrainAndTest(drop, lr, epoch, height, width, modelName, deviceName, testImgLoc, trainProb, testing):
+# XAI        : use XAI?
+def defaultTrainAndTest(drop, lr, epoch, height, width, modelName, deviceName, testImgLoc, trainProb, testing, XAI):
     a = loadImgs(testImgLoc, 16, 24)
     imgArray = a[0] # in the form of [height][width]
     labels = a[1] # in the form of [0, 0, ..., 0] (10 elements), only (label)-th element is 1
@@ -164,7 +200,7 @@ def defaultTrainAndTest(drop, lr, epoch, height, width, modelName, deviceName, t
     train(trainImgArray, trainLabels, modelName, drop, lr, epoch, height, width, deviceName)
 
     if testing == True:
-        test(testImgArray, testLabels, testFileList, modelName)
+        test(testImgArray, testLabels, testFileList, modelName, XAI)
         print('\ntrained using ' + str(len(trainLabels)) + ' images:\n' + str(list(set(file_list) - set(testFileList))) + '\n')
 
 ## check if the 'column of pixel' is B-W-B
@@ -303,7 +339,7 @@ if __name__ == '__main__':
         open('scoreRecognize.h5')
     except: # do train and test if the file does not exist
         defaultTrainAndTest(drop=0, lr=0.0001, epoch=200, height=24, width=16, modelName='scoreRecognize',
-                            deviceName=deviceName, testImgLoc=testImgLoc, trainProb=0.75, testing=True)
+                            deviceName=deviceName, testImgLoc=testImgLoc, trainProb=0.75, testing=True, XAI=True)
 
     # test for numeric value
     testNumericInLocation(testNumericLoc, 'scoreRecognize', 16, 24)
