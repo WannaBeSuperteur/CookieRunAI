@@ -56,13 +56,12 @@ def arrayCopyFlatten(array, iStart, iEnd, jStart, jEnd, exceedValue):
 
 # 2차원 배열의 전체를 복사하는 함수
 def arrayCopy(array):
-    assert(len(array) == len(array[0]))
-
-    size = len(array)
-    result = [[0] * size for j in range(size)]
+    height = len(array)
+    width = len(array[0])
+    result = [[0] * width for j in range(height)]
     
-    for i in range(size):
-        for j in range(size):
+    for i in range(height):
+        for j in range(width):
             result[i][j] = array[i][j]
 
     return result
